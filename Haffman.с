@@ -1,0 +1,171 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+ 
+struct sym //структуры или записи
+{
+        unsigned char ch; // символ записи
+        float freq;       // частота записи
+        char code[255];   // код записи
+        sym *left;
+        sym *right;
+};
+
+sym *makeTree(sym *psym[],int k)//рeкурсивная функция создания дерева Хоффмана
+{
+    sym *temp;
+    temp = (sym*)malloc(sizeof(sym));
+    temp->freq = psym[k-1]->freq + psym[k-2]->freq;
+    temp->code[0] = 0;
+    temp->left = psym[k-1];
+    temp->right = psym[k-2];
+ 
+    if(k==2)
+        return temp;
+    else //внесение в массив в нужное место элемента дерева Хоффмана
+    {
+        for(int i=0;i<k;i++)
+            if (temp->freq>psym[i]->freq)
+            {   
+                for(int j=k-1;j>i;j--)
+                    psym[j]=psym[j-1];                                  
+                
+                psym[i]=temp;
+                break;
+            }       
+    }
+return makeTree(psym,k-1);
+}
+ 
+void makeCodes(sym *root)//Рекурсивная функция кодирования
+{
+    if(root->left)
+    {
+        strcpy(root->left->code,root->code);
+        strcat(root->left->code,"0");
+        makeCodes(root->left);
+    }
+    if(root->right)
+    {
+        strcpy(root->right->code,root->code);
+        strcat(root->right->code,"1");
+        makeCodes(root->right);
+    }
+}
+
+int main ()
+{
+    int number;             // в эту переменную читается информация из файла
+    int k=0;                //счётчик количества различных букв, уникальных символов
+    int length=0;           // счётчтк количества всех знаков в файле
+    int kolvo[256]={0};     //инициализируем массив количества уникальных символов
+    sym simbols[256]={0};   //инициализируем массив записей 
+    sym *psym[256];         //инициализируем массив указателей на записи
+    float H = 0, M = 0;
+    char new_ch;
+    int key = 0;            // ключ для определения есть ли символ "0" в файле
+    float summa = 0, summir; // дополнительные переменные для символа 0
+
+    FILE *fp,*fp2;          //указатели на файлы
+    char name_file[] = "D:\\";
+    char name_file2[] = "Arh07.rar"; // имя исследуемого файла
+    strcat(name_file, name_file2);
+    char rashirenie[] = "07.Haf";
+    // строка для изменения названия результирующего файла
+    char file_end[] = "D:\\rar";
+    strcat(file_end, rashirenie);
+
+    
+    fp=fopen(name_file,"rb"); //открываем конкретный файл   
+    fp2=fopen(file_end,"wb");//открываем файл для записи сжатого файла
+    
+    //Обработка ошибок чтения файла
+    if(fp==NULL)
+    {
+        printf("Ошибка открытия файла");
+	exit(1);
+    }
+    
+    //Начинаем побайтно читать файл и составлять таблицу встречаемости (за исключением символа 0))
+    while((number=fgetc(fp))!= EOF){       
+        for(int j=0; j<256; j++){
+            if (number == simbols[j].ch)
+            {
+                kolvo[j]++;
+                length++;               
+                break;
+            }
+            if (simbols[j].ch == 0) // если не разу не было совпадения, то открываем особенный символ
+            {
+                simbols[j].ch=(unsigned char)number;
+                kolvo[j]=1;
+                k++; 
+                length++;
+                break;
+            }           
+        }       
+    }
+    
+    fputs(name_file2, fp2); // записываем в результирующий файл имя исследуемого файла
+    fputs("\r", fp2);
+    // записываем в результирующий файл количество символов в исследуемом файле
+    fprintf(fp2, "%d\r", length); fputs("\r", fp2);
+
+    
+    // определяем или есть 0???
+    rewind(fp); 
+    while(!feof(fp)){ 
+         new_ch = getc(fp);
+            if(new_ch == 0){
+                key = 1;
+                break;
+            }
+    }  
+    if(key == 1){
+        for(int i=0;i<k;i++)
+            summa = summa + kolvo[i];
+        summir = (length - summa)/length;
+        kolvo[k] = length - summa;
+        k++;
+    } 
+    
+    // Рассчёт частоты встречаемости
+    for(int i=0;i<k;i++){
+        simbols[i].freq=(float)kolvo[i]/length;
+        H = H + simbols[i].freq * log2(1/simbols[i].freq); // формула для вычисления энтропии
+    }
+ 
+    for(int i=0;i<k;i++) //в массив указателей заносим адреса записей
+        psym[i]=&simbols[i];
+
+//Сортировка по убыванию 
+    sym tempp;
+    for(int i=1;i<k;i++)
+        for(int j=0;j<k-1;j++)
+            if(simbols[j].freq < simbols[j+1].freq)
+            {
+                tempp = simbols[j];
+                simbols[j] = simbols[j+1];
+                simbols[j+1] = tempp;
+            }
+ 
+    sym *root = makeTree(psym,k);//вызов функции создания дерева Хофмана
+    
+    makeCodes(root);//вызов функции получения кода
+
+ for(int i=0;i<k;i++)
+{
+    fprintf(fp2, "%d", simbols[i].ch);
+    //fputs("\t\t", fp2);                   // показывает частоту встречаемости символа
+    //fprintf(fp2, "%f", simbols[i].freq);  //
+    fputs("\t\t", fp2);
+    fputs(simbols[i].code,fp2);
+    fputs("\t\t", fp2);
+    fwrite("\n\r", 1, 1, fp2);
+    M = M + simbols[i].freq*strlen(simbols[i].code); // формула вычисление средней длины кода сжатия
+}
+    fputs("\r", fp2); fprintf(fp2, "%f", M); // запись средней длины кода сжатия
+    fputs("\r", fp2); fprintf(fp2, "%f", H); // запись значения энтропии 
+return 0;
+}
